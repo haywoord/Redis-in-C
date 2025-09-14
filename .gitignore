@@ -1,0 +1,14 @@
+#CMake build folders
+/build/
+/CMakeFiles/
+/CMakeCache.txt
+
+#Executable files
+*.exe 
+*.out
+*.o 
+*.obj
+
+#IDE junk
+.vscode/
+.idea/
