@@ -3,6 +3,7 @@
 #include <ws2tcpip.h>
 #include <windows.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #define PORT 8080
 //use getaddrinfo for modern, cross platform hostname resolution
 
@@ -38,30 +39,42 @@ int __cdecl main() {
         return 1;
     }
 
-    printf("Connected to a server! \n");
+    printf("Connected to a server! Type \"Quit\", if you want to close a connection. \n");
     // The Winsock DLL is acceptable. Proceed to use it. 
     //const char *msg = "PING\r\n";
     //send(sock, msg, strlen(msg), 0);
+    while (true) {
+        // Send a response to a client
+        char mesg[200];
+        printf("Enter the message (reply): ");
+        fgets(mesg, sizeof(mesg), stdin);
+        int sbyteCount = send(sock, mesg, 200, 0);
+        if (sbyteCount == SOCKET_ERROR) {
+            printf("Client send error: %d\n", WSAGetLastError());
+            return 1;
+        }
+        //Convert string to a uppercase
+        for (int i = 0; i < strlen(mesg); i++) {
+            if (mesg[i] >= 'a' && mesg[i] <= 'z') {
+                mesg[i] = mesg[i] - 32;
+            }
+        }
+        //Check if client wants to close a connection
+        if (strcmp(mesg, "QUIT\n") == 0) {
+            printf("You closed connection\n");
+            break;
+        }
 
-        //Send a response to a client
-    char mesg[200];
-    printf("Enter the message (reply): ");
-    fgets(mesg, sizeof(mesg),stdin);
-    int sbyteCount = send(sock, mesg, 200, 0);
-    if (sbyteCount == SOCKET_ERROR) {
-        printf("Client send error: %d\n", WSAGetLastError());
-        return 1;
-    }
-
-    //Recive reply
-    char buffer[1024] = {0};
-    int bytes = recv(sock, buffer, sizeof(buffer) - 1, 0);
-    if (bytes > 0 ) {
-        buffer[bytes] = '\0';
-        printf("Reply: %s", buffer);
-    }
-    else {
-        printf("No response \n");
+        // Recive reply
+        char buffer[1024] = {0};
+        int bytes = recv(sock, buffer, sizeof(buffer) - 1, 0);
+        if (bytes > 0) {
+            buffer[bytes] = '\0';
+            printf("Reply: %s", buffer);
+        }
+        else {
+            printf("No response \n");
+        }
     }
 
     // then call WSACleanup when done using the Winsock dll 
