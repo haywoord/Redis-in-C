@@ -39,7 +39,7 @@ int __cdecl main() {
         return 1;
     }
 
-    printf("Connected to a server! Type \"Quit\", if you want to close a connection. \n");
+    printf("Connected to a server! Type \"QUIT\", if you want to close a connection. \n");
     // The Winsock DLL is acceptable. Proceed to use it. 
     //const char *msg = "PING\r\n";
     //send(sock, msg, strlen(msg), 0);
@@ -47,17 +47,18 @@ int __cdecl main() {
         // Send a response to a client
         char mesg[200];
         printf("Enter the message (reply): ");
-        fgets(mesg, sizeof(mesg), stdin);
-        int sbyteCount = send(sock, mesg, 200, 0);
+
+        if (fgets(mesg, sizeof(mesg), stdin) == NULL) {
+            printf("Input error occured. \n");
+            break;
+        };
+        char processBuffer[200];
+        strcpy(processBuffer, mesg);
+        processBuffer[strcspn(processBuffer, "\r\n")] = '\0'; //Remove trailing newline for processing, but keep original for sending
+        int sbyteCount = send(sock, mesg, strlen(mesg), 0);
         if (sbyteCount == SOCKET_ERROR) {
             printf("Client send error: %d\n", WSAGetLastError());
             return 1;
-        }
-        //Convert string to a uppercase
-        for (int i = 0; i < strlen(mesg); i++) {
-            if (mesg[i] >= 'a' && mesg[i] <= 'z') {
-                mesg[i] = mesg[i] - 32;
-            }
         }
         //Check if client wants to close a connection
         if (strcmp(mesg, "QUIT\n") == 0) {
