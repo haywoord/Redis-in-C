@@ -20,7 +20,7 @@ cd Redis-in-C
 gcc server.c -lws2_32 -o redis_clone_server.exe
 gcc client.c -lws2_32 -o redis_clone_client.exe
 ```
-For now, compile only client.c and server.c
+For now, compile only client.c and server.c.     
 The -lws2_32 flag is to explicitly link to the Windows compiled library (ws2_32.lib).
 
 ## 🖥️ Runing the Server
