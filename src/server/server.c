@@ -4,9 +4,13 @@
 #include <windows.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include "linlist.h"
 #define PORT 8080
 
-char *strremove(char *str, const char *sub);
+//char *strremove(char *str, const char *sub);
+//int sendResult(SOCKET sock, const char *msg);
+
+struct Entry* head = NULL;
 
 int main() {
     WSADATA wsaData;
@@ -99,11 +103,80 @@ int main() {
                 }
             }
             else if (strcmp(receiveBuffer, "PING") == 0) {
-                printf("PONG\n");
+                printf("PONG\r\n");
                 int sendResult = send(acceptSocket,"PONG\n", strlen("PONG\n"), 0);
                 if (sendResult == SOCKET_ERROR) {
                     printf("Send error: %d\n", WSAGetLastError());
                     break;
+                }
+            }
+            else if (strncmp(receiveBuffer, "SET ", 4) == 0) {
+                char *arg = receiveBuffer + 4;
+                char *key = arg;
+                char *value = strchr(arg, ' ');
+                if (value != NULL) {
+                    *value = '\0';
+                    value++;
+                    if (checkTheKey(head, key) == true) {
+                        int sendResult = send(acceptSocket, "The key is already in use\n", strlen("The key is already in use\n"), 0);
+                        if (sendResult == SOCKET_ERROR) {
+                            printf("Send error: %d\n", WSAGetLastError());
+                            break;
+                    }
+                    }
+                    else {
+                        insertAtEnd(&head, key, value); 
+                        int sendResult = send(acceptSocket, "OK\n", strlen("OK\n"), 0);
+                        if (sendResult == SOCKET_ERROR) {
+                            printf("Send error: %d\n", WSAGetLastError());
+                            break;
+                        }
+                    }
+                }
+                else {
+                    int sendResult = send(acceptSocket, "Invalid SET command\n", strlen("Invalid SET command\n"), 0);
+                    if (sendResult == SOCKET_ERROR) {
+                        printf("Send error: %d\n", WSAGetLastError());
+                        break;
+                    }
+                }
+            }
+            else if (strncmp(receiveBuffer, "GET ", 4) == 0) {
+                char *key = receiveBuffer + 4;
+                char *tokResult = printFromPosition(head, key);
+                if (tokResult != NULL) {
+                    char responseBuffer[200]; //use Malloc later
+                    snprintf(responseBuffer, sizeof(responseBuffer), "%s\n", tokResult);
+                    int sendResult = send(acceptSocket, responseBuffer, strlen(responseBuffer), 0);
+                    if (sendResult == SOCKET_ERROR) {
+                        printf("Send error: %d\n", WSAGetLastError());
+                        break;
+                    }
+                }
+                else {
+                    int sendResult = send(acceptSocket, "Key not found\n", strlen("Key not found\n"), 0);
+                    if (sendResult == SOCKET_ERROR) {
+                        printf("Send error: %d\n", WSAGetLastError());
+                        break;
+                    }
+                }
+            }
+            else if (strncmp(receiveBuffer, "DEL ", 4) == 0) {
+                char *key = receiveBuffer + 4;
+                if (checkTheKey(head, key) != false) {
+                    deleteAtPosition(&head, key);
+                    int sendResult = send(acceptSocket, "OK\n", strlen("OK\n"), 0);
+                    if (sendResult == SOCKET_ERROR) {
+                        printf("Send error: %d\n", WSAGetLastError());
+                        break;
+                    }
+                }
+                else {
+                    int sendResult = send(acceptSocket, "Key does not exist or is out of range\n", strlen("Key does not exist or is out of range\n"), 0);
+                    if (sendResult == SOCKET_ERROR) {
+                        printf("Send error: %d\n", WSAGetLastError());
+                        break;
+                    }
                 }
             }
             else if (strcmp(receiveBuffer, "QUIT") == 0) {
@@ -135,3 +208,27 @@ int main() {
 
     return 0;
 }
+
+/*char *strremove(char *str, const char *sub) {
+    char *p, *q, *r; 
+    if (*sub && (q = r = strstr(str, sub)) != NULL) { 
+        size_t len = strlen(sub); 
+        while ((r = strstr(p = r + len, sub)) != NULL) {
+            while (p < r) { 
+                *q++ = *p++;
+             } 
+        } 
+        while ((*q++ = *p++) != '\0') {
+            continue; 
+        }
+    } 
+    return str; 
+}
+int sendResult(SOCKET sock, const char *msg) {
+    int result = send(sock, msg, strlen(msg), 0);
+    if (result == SOCKET_ERROR) {
+        printf("Send error: %d\n", WSAGetLastError());
+        return -1;
+    }
+    return 0;
+}*/
