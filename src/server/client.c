@@ -4,7 +4,8 @@
 #include <windows.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#define PORT 8080
+#include "resp.h"
+#define PORT 6379
 //use getaddrinfo for modern, cross platform hostname resolution
 
 int __cdecl main() {
@@ -41,8 +42,6 @@ int __cdecl main() {
 
     printf("Connected to a server! Type \"QUIT\", if you want to close a connection. \n");
     // The Winsock DLL is acceptable. Proceed to use it. 
-    //const char *msg = "PING\r\n";
-    //send(sock, msg, strlen(msg), 0);
     while (true) {
         // Send a response to a client
         char mesg[200];
@@ -52,29 +51,42 @@ int __cdecl main() {
             printf("Input error occured. \n");
             break;
         };
+
         char processBuffer[200];
         strcpy(processBuffer, mesg);
-        processBuffer[strcspn(processBuffer, "\r\n")] = '\0'; //Remove trailing newline for processing, but keep original for sending
-        int sbyteCount = send(sock, mesg, strlen(mesg), 0);
+        processBuffer[strcspn(processBuffer, "\r\n")] = '\0'; // Remove trailing newline for processing, but keep original for sending
+
+        char sendArr[10][100];
+        char parsingBuffer[sizeof(processBuffer)];
+        strcpy(parsingBuffer, processBuffer);
+
+        int numArgs = 0;
+        char *token = strtok(parsingBuffer, " ");
+        if (strcmp(token, "QUIT") == 0) {
+            strcpy(sendArr[0], "QUIT");
+            numArgs = 1;
+            sendCommand(sock, numArgs, sendArr);
+            printf("You closed connection\n");
+            break;
+        }
+        int i = 0;
+        while (token != NULL) {
+            strcpy(sendArr[i], token);
+            numArgs++;
+            i++;
+            token = strtok(NULL, " ");
+        }
+
+        int sbyteCount = sendCommand(sock, numArgs, sendArr);
         if (sbyteCount == SOCKET_ERROR) {
             printf("Client send error: %d\n", WSAGetLastError());
             return 1;
         }
-        //Check if client wants to close a connection
-        if (strcmp(mesg, "QUIT\n") == 0) {
-            printf("You closed connection\n");
-            break;
-        }
 
-        // Recive reply
-        char buffer[1024] = {0};
-        int bytes = recv(sock, buffer, sizeof(buffer) - 1, 0);
-        if (bytes > 0) {
-            buffer[bytes] = '\0';
-            printf("Reply: %s", buffer);
-        }
-        else {
-            printf("No response \n");
+        // Recieve reply
+        if (parseResponse(sock) == -1) {
+            printf("Error passing server response\n");
+            break;
         }
     }
 

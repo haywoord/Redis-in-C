@@ -140,3 +140,34 @@ bool checkTheKey(struct Entry* head, char *key) {
     }
     return false;
 }
+
+char** listAllKeys(struct Entry* head, int *countOut) {
+    if (countNodes(head) <= 0) {
+        return NULL;
+    }
+    if (head == NULL) {
+        *countOut = 0;
+        return NULL;
+    }
+    struct Entry* temp = head;
+    int count = 0;
+    while (temp != NULL) {
+        count++;
+        temp = temp->next;
+    }
+    *countOut = count;
+
+    char** allKeys = (char**)malloc(sizeof(char*) * count);
+    if (allKeys == NULL) {
+        printf("Memory allocation failed for key lisy\n");
+        *countOut = 0;
+        return NULL;
+    }
+
+    temp = head;
+    for (int i = 0; i < count; i++) {
+        allKeys[i] = temp->key;
+        temp = temp->next;
+    }
+    return allKeys;
+}

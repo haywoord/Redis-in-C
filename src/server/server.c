@@ -5,10 +5,8 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include "linlist.h"
-#define PORT 8080
-
-//char *strremove(char *str, const char *sub);
-//int sendResult(SOCKET sock, const char *msg);
+#include "resp.h"
+#define PORT 6379
 
 struct Entry* head = NULL;
 
@@ -60,73 +58,55 @@ int main() {
         WSACleanup();
         return 1;
     }
-
+   
     while (true) {
-        // Recive data from the client
-        char receiveBuffer[200] = {0}; //important, initialize to all zeros, because recv function doesn't clear the buffer
-        //it just writes new data on top of what's already there. If the new data is shorter than the old data, remnants of the previous message will remain at the end of the buffer, causing subsequent strcmp checks to fail.
-        int rbyteCount = recv(acceptSocket, receiveBuffer, sizeof(receiveBuffer) - 1, 0);
-        if (rbyteCount == SOCKET_ERROR) {
-            printf("Server recived error: %d\n", WSAGetLastError());
+        int argc = 0;
+        char argv[10][100]; // Max 10 arguments, 100 chars each, later add dynamic memory alloc
+
+        //Use RESP parser
+        int parse_result = parseArrayFromSocket(acceptSocket, &argc, argv);
+        if (parse_result == -1) {
+            printf("Client disconnected or sent invalid data.\n");   // This could be a client disconnect or a protocol error
             break;
         }
-        if (rbyteCount > 0) {
-            receiveBuffer[rbyteCount] = '\0';
-            receiveBuffer[strcspn(receiveBuffer,"\r\n")] = '\0'; //Remove trainling newline and carriage return
-            printf("Message from client: '%s'\n", receiveBuffer);
-            if (strncmp(receiveBuffer, "ECHO", 4) == 0) {
-                if (strlen(receiveBuffer) > 4 && receiveBuffer[4] == ' ') {
-                    //Point to the content after echo
-                    char *echoContent = receiveBuffer + 5;
-                    //Create a buffer to hold the content + new line
-                    char responseBuffer[200];
-                    //Use snprintf to safely copy the string and add a new line with null-terminator
-                    int writCopy = snprintf(responseBuffer, sizeof(responseBuffer),"%s\n", echoContent);
-                    if (writCopy >= sizeof(responseBuffer)) {
-                        printf("Warning: response truncated\n");
-                    }
-                    printf("ECHO command: %s\n", echoContent);
-                    int sendResult = send(acceptSocket, responseBuffer, strlen(responseBuffer), 0);
-                    if (sendResult == SOCKET_ERROR) {
-                        printf("Send error: %d\n", WSAGetLastError());
-                        break;
-                    }
-                }
-                else {
-                    printf("ECHO command received. No arguments to echo.\n");
-                    const char* response = "ECHO command received. No arguments to echo.\n";
-                    int sendResult = send(acceptSocket, response, strlen(response), 0);
-                    if (sendResult == SOCKET_ERROR) {
-                        printf("Send error: %d\n", WSAGetLastError());
-                        break;
-                    }
-                }
+        if (argc == 0) { // No command parsed, continue waiting
+            continue;
+        }
+
+        // Process the parsed command from argv[0]
+        printf("Received command: %s\n", argv[0]);
+        if (strcmp(argv[0], "PING") == 0) {
+            sendSimpleString(acceptSocket, "PONG");
+        }
+        else if (strcmp(argv[0], "ECHO") == 0) {
+            if (argc != 2) {
+                sendSimpleError(acceptSocket, "ERR wrong number of arguments for 'ECHO' command");
             }
-            else if (strcmp(receiveBuffer, "PING") == 0) {
-                printf("PONG\r\n");
-                int sendResult = send(acceptSocket,"PONG\n", strlen("PONG\n"), 0);
-                if (sendResult == SOCKET_ERROR) {
-                    printf("Send error: %d\n", WSAGetLastError());
-                    break;
-                }
+            else {
+                sendBulkString(acceptSocket, argv[1]);
             }
-            else if (strncmp(receiveBuffer, "SET ", 4) == 0) {
-                char *arg = receiveBuffer + 4;
-                char *key = arg;
-                char *value = strchr(arg, ' ');
+        }
+        else if (strcmp(argv[0], "SET") == 0) {
+            if (argc != 3) {
+                sendSimpleError(acceptSocket, "ERR wrong number of arguments for 'SET' command");
+            }
+            else {
+                char *key = argv[1];
+                char *value = argv[2];
+
                 if (value != NULL) {
-                    *value = '\0';
-                    value++;
                     if (checkTheKey(head, key) == true) {
-                        int sendResult = send(acceptSocket, "The key is already in use\n", strlen("The key is already in use\n"), 0);
-                        if (sendResult == SOCKET_ERROR) {
+                        const char *errorMsg = "The key is already in use";
+                        int sendErr = sendSimpleError(acceptSocket, errorMsg);
+                        if (sendErr == SOCKET_ERROR) {
                             printf("Send error: %d\n", WSAGetLastError());
                             break;
-                    }
+                        }
                     }
                     else {
-                        insertAtEnd(&head, key, value); 
-                        int sendResult = send(acceptSocket, "OK\n", strlen("OK\n"), 0);
+                        insertAtEnd(&head, key, value);
+                        const char *okMsg = "OK";
+                        int sendResult = sendSimpleString(acceptSocket, okMsg);
                         if (sendResult == SOCKET_ERROR) {
                             printf("Send error: %d\n", WSAGetLastError());
                             break;
@@ -134,101 +114,75 @@ int main() {
                     }
                 }
                 else {
-                    int sendResult = send(acceptSocket, "Invalid SET command\n", strlen("Invalid SET command\n"), 0);
-                    if (sendResult == SOCKET_ERROR) {
+                    const char *errMsg = "Invalid SET command";
+                    int sendErr = sendSimpleError(acceptSocket, errMsg);
+                    if (sendErr == SOCKET_ERROR) {
                         printf("Send error: %d\n", WSAGetLastError());
                         break;
                     }
                 }
             }
-            else if (strncmp(receiveBuffer, "GET ", 4) == 0) {
-                char *key = receiveBuffer + 4;
-                char *tokResult = printFromPosition(head, key);
-                if (tokResult != NULL) {
-                    char responseBuffer[200]; //use Malloc later
-                    snprintf(responseBuffer, sizeof(responseBuffer), "%s\n", tokResult);
-                    int sendResult = send(acceptSocket, responseBuffer, strlen(responseBuffer), 0);
-                    if (sendResult == SOCKET_ERROR) {
-                        printf("Send error: %d\n", WSAGetLastError());
-                        break;
-                    }
-                }
-                else {
-                    int sendResult = send(acceptSocket, "Key not found\n", strlen("Key not found\n"), 0);
-                    if (sendResult == SOCKET_ERROR) {
-                        printf("Send error: %d\n", WSAGetLastError());
-                        break;
-                    }
-                }
-            }
-            else if (strncmp(receiveBuffer, "DEL ", 4) == 0) {
-                char *key = receiveBuffer + 4;
-                if (checkTheKey(head, key) != false) {
-                    deleteAtPosition(&head, key);
-                    int sendResult = send(acceptSocket, "OK\n", strlen("OK\n"), 0);
-                    if (sendResult == SOCKET_ERROR) {
-                        printf("Send error: %d\n", WSAGetLastError());
-                        break;
-                    }
-                }
-                else {
-                    int sendResult = send(acceptSocket, "Key does not exist or is out of range\n", strlen("Key does not exist or is out of range\n"), 0);
-                    if (sendResult == SOCKET_ERROR) {
-                        printf("Send error: %d\n", WSAGetLastError());
-                        break;
-                    }
-                }
-            }
-            else if (strcmp(receiveBuffer, "QUIT") == 0) {
-                printf("Client requested to close the connection.\n");
-                int sendResult = send(acceptSocket, "Goodbye!\n", strlen("Goodbye!\n"), 0);
-                if (sendResult == SOCKET_ERROR) {
-                    printf("Send error: %d\n", WSAGetLastError());
-                    break;
-                }
-                break;
+        }
+        else if (strcmp(argv[0], "GET") == 0) {
+            if (argc != 2) {
+                const char *errorMsg = "ERR wrong number of arguments for 'GET' command";
+                sendSimpleError(acceptSocket, errorMsg);
             }
             else {
-                printf("Message from a client: %s\n", receiveBuffer);
-                int sendResult = send(acceptSocket, "Unrecognized command.\n", strlen("Unrecognized command.\n"), 0);
-                if (sendResult == SOCKET_ERROR) {
-                    printf("Send error: %d\n", WSAGetLastError());
-                    break;
+                char *key = argv[1];
+                char *result = printFromPosition(head, key);
+                if (result != NULL) {
+                    sendBulkString(acceptSocket, result);
                 }
-            }  
+                else {
+                    sendNull(acceptSocket); // Send a RESP Null for a non-existent key
+                }
+            }
         }
-        else if (rbyteCount == 0) {
-            printf("Client disconnected. \n");
+        else if (strcmp(argv[0], "QUIT") == 0) {
+            printf("Client requested QUIT.\n");
+            sendSimpleString(acceptSocket, "OK");
             break;
         }
+        else if (strcmp(argv[0], "DEL") == 0) {
+            char *key = argv[1];
+            if (argc != 2) {
+                const char *errorMsg = "ERR wrong number of arguments for 'DEL' command";
+                sendSimpleError(acceptSocket, errorMsg);
+            }
+            else if (checkTheKey(head, key) != false) {
+                deleteAtPosition(&head, key);
+                const char *okMsg = "OK";
+                sendSimpleString(acceptSocket, okMsg);
+            }
+            else {
+                const char *errorMsg = "Key has not been found";
+                sendSimpleError(acceptSocket, errorMsg);
+            }
+        }
+        else if (strcmp(argv[0], "KEYS") == 0) {
+            int keyCount;
+            char **keys = listAllKeys(head, &keyCount);
+            if (argc != 1) {
+                const char *errorMsg = "ERR wrong number of arguments for 'KEYS' command";
+                sendSimpleError(acceptSocket, errorMsg);
+            }
+            if (keys != NULL) {
+                sendArray(acceptSocket, keyCount, keys);
+                free(keys);
+            }
+        }
+        else {
+            // Unrecognized command
+            char errorMsg[200];
+            snprintf(errorMsg, sizeof(errorMsg), "ERR unknown command '%s'", argv[0]);
+            sendSimpleError(acceptSocket, errorMsg);
+        }
     }
+
     closesocket(acceptSocket);
     closesocket(serverSocket);
     WSACleanup();
 
     return 0;
 }
-
-/*char *strremove(char *str, const char *sub) {
-    char *p, *q, *r; 
-    if (*sub && (q = r = strstr(str, sub)) != NULL) { 
-        size_t len = strlen(sub); 
-        while ((r = strstr(p = r + len, sub)) != NULL) {
-            while (p < r) { 
-                *q++ = *p++;
-             } 
-        } 
-        while ((*q++ = *p++) != '\0') {
-            continue; 
-        }
-    } 
-    return str; 
-}
-int sendResult(SOCKET sock, const char *msg) {
-    int result = send(sock, msg, strlen(msg), 0);
-    if (result == SOCKET_ERROR) {
-        printf("Send error: %d\n", WSAGetLastError());
-        return -1;
-    }
-    return 0;
-}*/
