@@ -6,33 +6,60 @@ A Redis clone implementation built in C. Built for learning purposes and as a po
 ## Prerequisites
 * A C compiler (e.g., GCC, MinGW).
 * CMake (3.10 or higher) must be installed and available in your system's PATH.
-* This project is designed to be compiled and run on Windows operating systems only (so far).
+* This project is designed to be compiled and run on Windows operating systems only (so far). 
+* Windows Specific: If compiling on Windows, you must have a modern toolchain like MinGW or MSYS2 installed and configured to use the gcc command. Winsock (ws2_32) linking is handled automatically by the provided CMake files.
 
-## 🧑‍💻 Compiling
-1. Clone the repository:
+## 🧑‍💻 Installation and Compilation
+* Compilation Instructions
+We use an out-of-source build to keep the source directory clean. All commands should be run from the root directory of the project 
+
+1. First, clone the repository from GitHub to get all the necessary source files:
 ```sh
 git clone https://github.com/your-username/Redis-in-C.git
 cd Redis-in-C
 ``` 
 
-2. Compile the source code using your C compiler. For example, with MinGW on Windows:
+2. Configure the Build Directory
+First, create a separate directory (conventionally named build) and run cmake from inside it to configure the project files.
 ```sh
-gcc server.c -lws2_32 -o redis_clone_server.exe
-gcc client.c -lws2_32 -o redis_clone_client.exe
+mkdir build
+cd build
+cmake ..
 ```
-For now, compile only client.c and server.c.     
-The -lws2_32 flag is to explicitly link to the Windows compiled library (ws2_32.lib).
 
-## 🖥️ Runing the Server
-1. After compiling, run the server and the client in 2 separate terminals
+3. Build the Executables
+Next, run the build command. CMake will automatically compile all source files (server.c, client.c, linlist.c, etc.) and link them into two separate programs: server.exe and client.exe.
 ```sh
-.\redis_clone_server.exe
-.\redis_clone_client.exe
+# This command automatically detects your build system (like MinGW or Make)
+cmake --build .
 ```
-The server currently only supports 1 connection 
+After compilation, you will find the final executables inside the build/src/server/ directory (or similar, depending on your environment).
+
+## 🖥️ Running the Application
+Since the client and server are separate programs, they must be run in separate terminal sessions.
+
+1. Start the Server
+Open the first terminal and navigate to the output directory to start the server. This program will block, waiting for client connections.
+```sh
+# Example path, may vary slightly
+./src/server/server.exe 
+```
+The server currently only supports 1 connection.
+
+2. Run the Client
+Open a second terminal and run the client to connect to the listening server.
+```sh
+# Example path, may vary slightly
+./src/server/client.exe 
+```
+The client will connect, and you can begin testing RESP commands.
 
 # 🧠 Core Commands Implemented
 This project currently supports a only a small amount of standard Redis commands. 
-* PING : Responds with PONG
-* ECHO message : Returns the given string "message"
-* QUIT : Closes connection with the server
+* PING : Responds with "PONG".
+* ECHO message : Returns the given string "message".
+* QUIT : Closes connection with the server.
+* SET key value : Set key to hold the string value. If key already holds a value, it will not be overwritten.
+* GET key : Get the string value of key. If the key does not exist, the error is returned.
+* DEL key : Removes the specified keys.
+* KEYS : Returns all keys matching pattern.
