@@ -15,7 +15,7 @@ We use an out-of-source build to keep the source directory clean. All commands s
 
 1. First, clone the repository from GitHub to get all the necessary source files:
 ```sh
-git clone https://github.com/your-username/Redis-in-C.git
+git clone https://github.com/haywoord/Redis-in-C.git
 cd Redis-in-C
 ``` 
 
@@ -39,7 +39,8 @@ After compilation, you will find the final executables inside the build/src/serv
 Since the client and server are separate programs, they must be run in separate terminal sessions.
 
 1. Start the Server
-Open the first terminal and navigate to the output directory to start the server. This program will block, waiting for client connections.
+
+* Open the first terminal and navigate to the output directory to start the server. This program will block, waiting for client connections.
 ```sh
 # Example path, may vary slightly
 ./src/server/server.exe 
@@ -47,7 +48,8 @@ Open the first terminal and navigate to the output directory to start the server
 The server currently only supports 1 connection.
 
 2. Run the Client
-Open a second terminal and run the client to connect to the listening server.
+
+* Open a second terminal and run the client to connect to the listening server.
 ```sh
 # Example path, may vary slightly
 ./src/server/client.exe 
