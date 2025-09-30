@@ -163,13 +163,33 @@ int main() {
         else if (strcmp(argv[0], "KEYS") == 0) {
             int keyCount;
             char **keys = listAllKeys(head, &keyCount);
-            if (argc != 1) {
+            if (keys == NULL) {
+                const char *errorMsg = "ERR no key exists";
+                sendSimpleError(acceptSocket, errorMsg);
+            }
+            else if (argc != 1) {
                 const char *errorMsg = "ERR wrong number of arguments for 'KEYS' command";
                 sendSimpleError(acceptSocket, errorMsg);
             }
-            if (keys != NULL) {
+            else if (keys != NULL) {
                 sendArray(acceptSocket, keyCount, keys);
-                free(keys);
+            }
+            free(keys);
+        }
+        else if (strcmp(argv[0], "KEY") == 0) {
+            if (argc != 2) {
+                const char *errorMsg = "ERR wrong number of arguments for 'KEY' command";
+                sendSimpleError(acceptSocket, errorMsg);
+            }
+            else {
+                if (checkTheKey(head, argv[1])) {
+                    const char *returnMsg = "The key exists";
+                    sendSimpleString(acceptSocket, returnMsg);
+                }
+                else {
+                    const char *returnMsg = "The key does not exist";
+                    sendSimpleString(acceptSocket, returnMsg);
+                }
             }
         }
         else {
