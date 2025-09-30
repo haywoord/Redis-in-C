@@ -11,6 +11,7 @@ A Redis clone implementation built in C. Built for learning purposes and as a po
 
 ## 🧑‍💻 Installation and Compilation
 * Compilation Instructions
+
 We use an out-of-source build to keep the source directory clean. All commands should be run from the root directory of the project 
 
 1. First, clone the repository from GitHub to get all the necessary source files:
@@ -20,6 +21,7 @@ cd Redis-in-C
 ``` 
 
 2. Configure the Build Directory
+
 First, create a separate directory (conventionally named build) and run cmake from inside it to configure the project files.
 ```sh
 mkdir build
@@ -28,6 +30,7 @@ cmake ..
 ```
 
 3. Build the Executables
+
 Next, run the build command. CMake will automatically compile all source files (server.c, client.c, linlist.c, etc.) and link them into two separate programs: server.exe and client.exe.
 ```sh
 # This command automatically detects your build system (like MinGW or Make)
@@ -65,3 +68,4 @@ This project currently supports a only a small amount of standard Redis commands
 * GET key : Get the string value of key. If the key does not exist, the error is returned.
 * DEL key : Removes the specified keys.
 * KEYS : Returns all keys matching pattern.
+* KEY key: Returns a key matching a specific pattern.
