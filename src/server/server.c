@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include "linlist.h"
 #include "resp.h"
+#include <persistence.h>
 #define PORT 6379
 
 struct Entry* head = NULL;
@@ -58,6 +59,15 @@ int main() {
         WSACleanup();
         return 1;
     }
+
+    FILE* Firstfptr;
+    Firstfptr = fopen("appendonly.aof","ab");
+    if (Firstfptr == NULL) {
+        printf("File append error.\n");
+        return 1;
+    }
+
+    loadAOF(&head);
    
     while (true) {
         int argc = 0;
@@ -105,6 +115,13 @@ int main() {
                     }
                     else {
                         insertAtEnd(&head, key, value);
+                        fprintf(Firstfptr, "*%d\r\n", argc);
+                        for (int i = 0; i < argc; i++) {
+                            size_t len = strlen(argv[i]);
+                            fprintf(Firstfptr, "$%zu\r\n", len);
+                            fwrite(argv[i], 1, len, Firstfptr);
+                            fwrite("\r\n", 1, 2, Firstfptr);
+                        }
                         const char *okMsg = "OK";
                         int sendResult = sendSimpleString(acceptSocket, okMsg);
                         if (sendResult == SOCKET_ERROR) {
@@ -141,7 +158,6 @@ int main() {
         }
         else if (strcmp(argv[0], "QUIT") == 0) {
             printf("Client requested QUIT.\n");
-            sendSimpleString(acceptSocket, "OK");
             break;
         }
         else if (strcmp(argv[0], "DEL") == 0) {
@@ -150,8 +166,15 @@ int main() {
                 const char *errorMsg = "ERR wrong number of arguments for 'DEL' command";
                 sendSimpleError(acceptSocket, errorMsg);
             }
-            else if (checkTheKey(head, key) != false) {
+            else if (checkTheKey(head, key)) {
                 deleteAtPosition(&head, key);
+                fprintf(Firstfptr, "*%d\r\n", argc);
+                for (int i = 0; i < argc; i++) {
+                    size_t len = strlen(argv[i]);
+                    fprintf(Firstfptr, "$%zu\r\n", len);
+                    fwrite(argv[i], 1, len, Firstfptr);
+                    fwrite("\r\n", 1, 2, Firstfptr);
+                }
                 const char *okMsg = "OK";
                 sendSimpleString(acceptSocket, okMsg);
             }
@@ -199,7 +222,7 @@ int main() {
             sendSimpleError(acceptSocket, errorMsg);
         }
     }
-
+    fclose(Firstfptr);
     closesocket(acceptSocket);
     closesocket(serverSocket);
     WSACleanup();

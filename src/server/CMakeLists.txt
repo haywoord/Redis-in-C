@@ -2,6 +2,7 @@
 add_executable(server
     server.c
     linlist.c
+    persistence.c
 )
 
 target_include_directories(server PRIVATE ${CMAKE_SOURCE_DIR}/include)
