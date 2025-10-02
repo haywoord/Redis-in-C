@@ -8,6 +8,7 @@
 #include "resp.h"
 #include <persistence.h>
 #define PORT 6379
+#define AOF_MAX_SIZE (10 * 1024 * 1024) //10 MB
 
 struct Entry* head = NULL;
 
@@ -60,13 +61,30 @@ int main() {
         return 1;
     }
 
+    FILE* snapShotfptr;
+    snapShotfptr = fopen("snapshot.rdb","a");
+    if (snapShotfptr == NULL) {
+        printf("File append error.\n");
+        return 1;
+    }
+
+    if (loadSnapShot("snapshot.rdb", head) == -1) {
+        printf("Error when loading the snapshot.\n");
+        return -1;
+    }
+
     FILE* Firstfptr;
     Firstfptr = fopen("appendonly.aof","ab");
     if (Firstfptr == NULL) {
         printf("File append error.\n");
         return 1;
     }
-
+    
+    long size = getFileSize("appendonly.aof");
+    if (size > AOF_MAX_SIZE) {
+        const char *warnmsg = "Warning: AOF file is too large, consider running BGREWRITEAOF";
+        sendSimpleError(acceptSocket, warnmsg);
+    }
     loadAOF(&head);
    
     while (true) {
@@ -115,13 +133,7 @@ int main() {
                     }
                     else {
                         insertAtEnd(&head, key, value);
-                        fprintf(Firstfptr, "*%d\r\n", argc);
-                        for (int i = 0; i < argc; i++) {
-                            size_t len = strlen(argv[i]);
-                            fprintf(Firstfptr, "$%zu\r\n", len);
-                            fwrite(argv[i], 1, len, Firstfptr);
-                            fwrite("\r\n", 1, 2, Firstfptr);
-                        }
+                        writeToAOF(Firstfptr, argc, argv);
                         const char *okMsg = "OK";
                         int sendResult = sendSimpleString(acceptSocket, okMsg);
                         if (sendResult == SOCKET_ERROR) {
@@ -168,13 +180,7 @@ int main() {
             }
             else if (checkTheKey(head, key)) {
                 deleteAtPosition(&head, key);
-                fprintf(Firstfptr, "*%d\r\n", argc);
-                for (int i = 0; i < argc; i++) {
-                    size_t len = strlen(argv[i]);
-                    fprintf(Firstfptr, "$%zu\r\n", len);
-                    fwrite(argv[i], 1, len, Firstfptr);
-                    fwrite("\r\n", 1, 2, Firstfptr);
-                }
+                writeToAOF(Firstfptr, argc, argv);
                 const char *okMsg = "OK";
                 sendSimpleString(acceptSocket, okMsg);
             }
@@ -215,6 +221,22 @@ int main() {
                 }
             }
         }
+        else if (strcmp(argv[0], "SAVE") == 0) {
+            if (argc != 1) {
+                const char *errorMsg = "ERR wrong number of arguments for 'SAVE' command";
+                sendSimpleError(acceptSocket, errorMsg);
+            }
+            else {
+                saveSnapShot("snapshot.rdb", head);
+                const char *okMsg = "OK";
+                sendSimpleString(acceptSocket, okMsg);
+            }
+        }
+        else if (strcmp(argv[0], "BGREWRITEAOF") == 0) {
+            rewriteAOF("appendonly.aof", head);
+            const char *returnMsg = "Background append only file rewrite started";
+            sendSimpleString(acceptSocket, returnMsg);
+        }
         else {
             // Unrecognized command
             char errorMsg[200];
@@ -223,6 +245,7 @@ int main() {
         }
     }
     fclose(Firstfptr);
+    fclose(snapShotfptr);
     closesocket(acceptSocket);
     closesocket(serverSocket);
     WSACleanup();

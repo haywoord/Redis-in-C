@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <persistence.h>
+#include <linlist.h>
 
 int recvLineFile(FILE *f, char *buf, int max) {
     int i = 0, c;
@@ -66,4 +67,89 @@ void loadAOF(struct Entry **head) {
      }
 
     fclose(aof);
+}
+
+int writeToAOF(FILE *fptr, int argc, char argv[][100]) {
+
+    FILE* Firstfptr;
+    Firstfptr = fopen("appendonly.aof","ab");
+    if (Firstfptr == NULL) {
+        printf("File append error.\n");
+        return 1;
+    }
+
+    fprintf(Firstfptr, "*%d\r\n", argc);
+    for (int i = 0; i < argc; i++) {
+        size_t len = strlen(argv[i]);
+        fprintf(Firstfptr, "$%zu\r\n", len);
+        fwrite(argv[i], 1, len, Firstfptr);
+        fwrite("\r\n", 1, 2, Firstfptr);
+    }
+    return 0;
+}
+
+int rewriteAOF(const char *fileName, struct Entry *head) {
+
+    FILE *fptr = fopen(fileName, "w");
+    if (!fptr) {
+        printf("File open error:\n");
+        return -1;
+    }
+
+    struct Entry *curr = head;
+    while (curr) {
+        fprintf(fptr, "SET %s %s\n", curr->key, curr->value);
+        curr = curr->next;
+    }
+
+    fclose(fptr);
+    return 0;
+}
+
+long getFileSize(const char *filename) {
+    FILE *fptr = fopen(filename, "rb");
+    if (!fptr) {
+        return -1;
+    }
+    fseek(fptr, 0, SEEK_END);
+    long size = ftell(fptr);
+    fclose(fptr);
+    return size;
+}
+
+//RDB functions
+
+int saveSnapShot(const char *fileName, struct Entry *head) {
+
+    FILE *fptr = fopen(fileName, "w");
+    if (!fptr) {
+        printf("File open error:\n");
+        return -1;
+    }
+
+    struct Entry *curr = head;
+    while (curr) {
+        fprintf(fptr, "%s %s\n", curr->key, curr->value);
+        curr = curr->next;
+    }
+
+    fclose(fptr);
+    return 0;
+}
+
+int loadSnapShot(const char *filename, struct Entry* head) {
+    
+    FILE *fptr = fopen(filename,"r");
+    if (!fptr) {
+        printf("File open/read error\n");
+        return -1;
+    }
+
+    char key[256], value[256];
+    while(fscanf(fptr, "%255s %255s", key, value) == 2) {
+        insertAtEnd(&head, key, value);
+    }
+    
+    fclose(fptr);
+    return 0;
 }
